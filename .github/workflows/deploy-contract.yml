@@ -1,0 +1,90 @@
+name: Deploy DreamFund to NEAR testnet
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust and WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build contract
+        working-directory: contract
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install NEAR JavaScript API
+        run: npm install --prefix /tmp/near-deploy near-api-js@5.1.1
+
+      - name: Deploy and initialize contract
+        env:
+          NEAR_TESTNET_ACCOUNT_ID: ${{ vars.NEAR_TESTNET_ACCOUNT_ID }}
+          NEAR_TESTNET_PRIVATE_KEY: ${{ secrets.NEAR_TESTNET_PRIVATE_KEY }}
+        run: |
+          cat > /tmp/near-deploy/deploy.mjs <<'EOF'
+          import { connect, keyStores, KeyPair } from "near-api-js";
+          import { readFile, writeFile } from "node:fs/promises";
+
+          const accountId = process.env.NEAR_TESTNET_ACCOUNT_ID;
+          const privateKey = process.env.NEAR_TESTNET_PRIVATE_KEY;
+          if (!accountId || !privateKey) {
+            throw new Error("Set repository variable NEAR_TESTNET_ACCOUNT_ID and secret NEAR_TESTNET_PRIVATE_KEY first.");
+          }
+          if (!accountId.endsWith(".testnet")) {
+            throw new Error("The deployment account must end in .testnet.");
+          }
+
+          const keyStore = new keyStores.InMemoryKeyStore();
+          await keyStore.setKey("testnet", accountId, KeyPair.fromString(privateKey));
+          const near = await connect({
+            networkId: "testnet",
+            nodeUrl: "https://rpc.testnet.near.org",
+            keyStore
+          });
+          const account = await near.account(accountId);
+          const wasm = new Uint8Array(await readFile("contract/target/wasm32-unknown-unknown/release/dreamfund.wasm"));
+
+          console.log("Deploying DreamFund to", accountId);
+          const deployed = await account.deployContract(wasm);
+          console.log("DEPLOY_TX=" + deployed.transaction.hash);
+
+          console.log("Initializing DreamFund (pool starts at zero)");
+          const initialized = await account.functionCall({
+            contractId: accountId,
+            methodName: "new",
+            args: {},
+            gas: 30000000000000n,
+            attachedDeposit: 0n
+          });
+          console.log("INIT_TX=" + initialized.transaction.hash);
+
+          await writeFile("config.js", "// Public deployment configuration. Updated by the deploy-contract workflow.\nwindow.DREAMFUND_CONTRACT_ID = " + JSON.stringify(accountId) + ";\n");
+          console.log("Configured frontend for", accountId);
+          EOF
+          node /tmp/near-deploy/deploy.mjs
+
+      - name: Commit public contract configuration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config.js
+          if git diff --cached --quiet; then
+            echo "Contract configuration is already current."
+          else
+            git commit -m "Configure deployed DreamFund testnet contract"
+            git push
+          fi
