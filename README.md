@@ -4,13 +4,13 @@ A public-goods funding pool where projects receive money in milestones. Successf
 
 ## Current status
 
-Initial project scaffold. The contract and browser UI are being wired together. Do not treat this repository as deployed until the testnet contract address and live transaction links are added below.
+Working scaffold with shared-pool contributions, resolver allocation, direct pledges, evidence submission, milestone payout, and fail-to-pool recycling. Testnet deployment and end-to-end transaction validation are still pending. Do not treat this repository as deployed until the testnet contract address and live transaction links are added below.
 
 ## Core demo
 
 1. Connect a NEAR **testnet** wallet.
 2. Create or open two projects.
-3. Pledge testnet NEAR to each project.
+3. Add testnet NEAR to the shared pool, then have the demo resolver allocate funds to projects. Direct project pledges are also supported.
 4. Submit an evidence hash for a project's current milestone.
 5. The demo resolver approves one milestone and the contract pays its tranche to the project owner.
 6. The resolver fails the other project and its remaining locked funds return to the community pool.
@@ -30,7 +30,9 @@ The Rust contract source is in `contract/`. Initial methods:
 
 - `new()`
 - `create_project(title, goal, milestones)`
-- `pledge(project_id)` — payable
+- `fund_pool()` — payable; contributes to the shared pool
+- `allocate_from_pool(project_id, amount)` — owner-only demo allocation from the shared pool
+- `pledge(project_id)` — payable direct project contribution
 - `submit_evidence(project_id, evidence_hash)`
 - `resolve_milestone(project_id, pass)`
 - `get_pool()`
