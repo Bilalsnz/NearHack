@@ -88,8 +88,8 @@ async function call(methodName, args = {}, deposit = "0") {
     contractId: CONTRACT_ID,
     methodName,
     args,
-    gas: GAS,
-    attachedDeposit: deposit
+    gas: BigInt(GAS),
+    attachedDeposit: BigInt(deposit)
   });
 }
 async function refresh() {
