@@ -13,6 +13,7 @@ const GAS = "30000000000000";
 let near;
 let wallet;
 let account;
+let resolverAccount = null;
 let toastTimer;
 
 const $ = (id) => document.getElementById(id);
@@ -98,22 +99,24 @@ async function refresh() {
     return;
   }
   try {
-    const [pool, projects] = await Promise.all([
+    const [pool, projects, resolver] = await Promise.all([
       view("get_pool"),
-      view("get_projects")
+      view("get_projects"),
+      view("get_owner")
     ]);
+    resolverAccount = resolver;
     $("pool-balance").innerHTML = `${formatNear(pool)} <small>NEAR</small>`;
     $("project-count").textContent = projects.length;
     $("my-rep").textContent = wallet?.isSignedIn()
       ? await view("get_reputation", { account: wallet.getAccountId() })
       : "—";
-    renderProjects(projects);
+    await renderProjects(projects);
   } catch (error) {
     console.error(error);
     toast("Could not load contract data: " + error.message);
   }
 }
-function renderProjects(projects) {
+async function renderProjects(projects) {
   const grid = $("project-grid");
   grid.innerHTML = "";
   if (!projects.length) {
@@ -136,9 +139,10 @@ function renderProjects(projects) {
     ).join("");
     node.querySelector(".evidence-display").textContent = project.evidence_hash ? "Evidence: " + project.evidence_hash : "No evidence submitted for current milestone";
     node.querySelector(".owner-line").textContent = "Founder: " + project.owner;
-    node.querySelector(".reputation-line").textContent = "Milestones delivered: " + awaitlessRepPlaceholder(project);
+    const founderRep = await view("get_reputation", { account: project.owner });
+    node.querySelector(".reputation-line").textContent = "Verified deliveries: " + founderRep;
     const isOwner = wallet?.isSignedIn() && wallet.getAccountId() === project.owner;
-    const isResolver = wallet?.isSignedIn() && wallet.getAccountId() === window.DREAMFUND_OWNER;
+    const isResolver = wallet?.isSignedIn() && wallet.getAccountId() === resolverAccount;
     node.querySelector(".btn-pledge").onclick = () => pledge(project.id);
     node.querySelector(".btn-evidence").onclick = () => submitEvidence(project.id);
     node.querySelector(".btn-pass").onclick = () => resolve(project.id, true);
@@ -150,9 +154,6 @@ function renderProjects(projects) {
     node.querySelector(".explorer-link").href = NETWORK.explorerUrl + "/address/" + encodeURIComponent(CONTRACT_ID);
     grid.appendChild(node);
   }
-}
-function awaitlessRepPlaceholder(project) {
-  return "tracked on-chain";
 }
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
