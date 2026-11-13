@@ -1,7 +1,7 @@
 import { connect, keyStores, WalletConnection, utils } from "https://esm.sh/near-api-js@5.1.1";
 
 // Replace this after deploying contract/src/lib.rs to NEAR testnet.
-const CONTRACT_ID = "REPLACE_WITH_YOUR_CONTRACT.testnet";
+const CONTRACT_ID = window.DREAMFUND_CONTRACT_ID || "REPLACE_WITH_YOUR_CONTRACT.testnet";
 const NETWORK = {
   networkId: "testnet",
   nodeUrl: "https://rpc.testnet.near.org",
