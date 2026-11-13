@@ -53,8 +53,8 @@ async function initWallet() {
   if (wallet.isSignedIn()) {
     $("btn-connect").textContent = "Disconnect";
     $("wallet-account").textContent = wallet.getAccountId();
-    await refresh();
   }
+  await refresh();
 }
 async function connectWallet() {
   if (wallet?.isSignedIn()) {
