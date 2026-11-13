@@ -1,0 +1,26 @@
+name: Build NEAR contract
+on:
+  push:
+    paths:
+      - "contract/**"
+      - ".github/workflows/contract-build.yml"
+  pull_request:
+    paths:
+      - "contract/**"
+      - ".github/workflows/contract-build.yml"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build DreamFund contract
+        working-directory: contract
+        run: cargo build --target wasm32-unknown-unknown --release
+      - name: Upload contract WASM
+        uses: actions/upload-artifact@v4
+        with:
+          name: dreamfund-wasm
+          path: contract/target/wasm32-unknown-unknown/release/dreamfund.wasm
