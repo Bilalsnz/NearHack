@@ -47,7 +47,7 @@ Static HTML/CSS/JS at the repository root. The app reads the deployed account ID
 
 ## Deploy from a phone (GitHub Actions)
 
-1. Create a dedicated NEAR **testnet** account with a full-access key and fund it with faucet NEAR.
+1. Create a dedicated NEAR **testnet** account with a full-access key at [MyNearWallet Testnet](https://testnet.mynearwallet.com/), then fund it using the [NEAR Testnet Faucet](https://near-faucet.io/).
 2. In this repository open **Settings → Secrets and variables → Actions**.
 3. Add repository variable `NEAR_TESTNET_ACCOUNT_ID` with the account ID (for example, `dreamfund-demo.testnet`).
 4. Add repository secret `NEAR_TESTNET_PRIVATE_KEY` with that account's full-access private key. **Never paste the key into chat, an issue, or a commit.**
