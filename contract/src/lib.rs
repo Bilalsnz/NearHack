@@ -142,8 +142,9 @@ impl DreamFund {
         assert!(amount > 0, "Attach a positive NEAR amount");
         let mut project = self.projects.get(&project_id).expect("Project not found");
         assert!(project.status == "funding" || project.status == "in_progress", "Project is not accepting pledges");
-        assert!(project.raised.saturating_add(amount) <= project.goal, "Pledge exceeds project goal");
-        project.raised += amount;
+        let new_raised = project.raised.checked_add(amount).expect("Project raised overflow");
+        assert!(new_raised <= project.goal, "Pledge exceeds project goal");
+        project.raised = new_raised;
         if project.status == "funding" { project.status = "in_progress".to_string(); }
         self.projects.insert(&project_id, &project);
     }
