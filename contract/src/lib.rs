@@ -6,22 +6,20 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct Milestone {
     pub label: String,
-    pub amount: U128,
+    pub amount: u128,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct Project {
     pub id: u64,
     pub owner: AccountId,
     pub title: String,
-    pub goal: U128,
-    pub raised: U128,
-    pub paid: U128,
+    pub goal: u128,
+    pub raised: u128,
+    pub paid: u128,
     pub milestone_index: u8,
     pub milestones: Vec<Milestone>,
     pub status: String,
@@ -29,12 +27,38 @@ pub struct Project {
     pub failure_reason: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct MilestoneView { pub label: String, pub amount: U128 }
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ProjectView {
+    pub id: u64, pub owner: AccountId, pub title: String,
+    pub goal: U128, pub raised: U128, pub paid: U128,
+    pub milestone_index: u8, pub milestones: Vec<MilestoneView>,
+    pub status: String, pub evidence_hash: Option<String>,
+    pub failure_reason: Option<String>,
+}
+
+impl From<Project> for ProjectView {
+    fn from(p: Project) -> Self {
+        Self {
+            id: p.id, owner: p.owner, title: p.title,
+            goal: U128(p.goal), raised: U128(p.raised), paid: U128(p.paid),
+            milestone_index: p.milestone_index,
+            milestones: p.milestones.into_iter().map(|m| MilestoneView {
+                label: m.label, amount: U128(m.amount),
+            }).collect(),
+            status: p.status, evidence_hash: p.evidence_hash,
+            failure_reason: p.failure_reason,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct MilestoneInput {
-    pub label: String,
-    pub amount: U128,
-}
+pub struct MilestoneInput { pub label: String, pub amount: U128 }
 
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
@@ -49,6 +73,7 @@ pub struct DreamFund {
 
 #[near]
 impl DreamFund {
+    /// Deploy with an optional attached deposit to seed the public pool.
     #[init]
     #[payable]
     pub fn new() -> Self {
@@ -62,57 +87,39 @@ impl DreamFund {
         }
     }
 
-    pub fn create_project(
-        &mut self,
-        title: String,
-        goal: U128,
-        milestones: Vec<MilestoneInput>,
-    ) -> u64 {
+    pub fn create_project(&mut self, title: String, goal: U128, milestones: Vec<MilestoneInput>) -> u64 {
         assert!(!title.trim().is_empty(), "Title is required");
         assert!(goal.0 > 0, "Goal must be greater than zero");
         assert!(!milestones.is_empty() && milestones.len() <= 2, "Use one or two milestones");
-
+        for m in milestones.iter() {
+            assert!(!m.label.trim().is_empty(), "Milestone label is required");
+            assert!(m.amount.0 > 0, "Milestone amount must be positive");
+        }
         let total: u128 = milestones.iter().map(|m| m.amount.0).sum();
         assert!(total > 0 && total <= goal.0, "Milestone total must be > 0 and <= goal");
-
         let id = self.next_project_id;
         self.next_project_id += 1;
-
         let project = Project {
-            id,
-            owner: env::predecessor_account_id(),
-            title,
-            goal,
-            raised: U128(0),
-            paid: U128(0),
-            milestone_index: 0,
-            milestones: milestones.into_iter().map(|m| Milestone {
-                label: m.label,
-                amount: m.amount,
-            }).collect(),
-            status: "funding".to_string(),
-            evidence_hash: None,
-            failure_reason: None,
+            id, owner: env::predecessor_account_id(), title, goal: goal.0,
+            raised: 0, paid: 0, milestone_index: 0,
+            milestones: milestones.into_iter().map(|m| Milestone { label: m.label, amount: m.amount.0 }).collect(),
+            status: "funding".to_string(), evidence_hash: None, failure_reason: None,
         };
-
         self.projects.insert(&id, &project);
         self.project_ids.push(id);
         id
     }
 
+    /// Attach NEAR to pledge directly to a project's locked allocation.
     #[payable]
     pub fn pledge(&mut self, project_id: u64) {
         let amount = env::attached_deposit().as_yoctonear();
         assert!(amount > 0, "Attach a positive NEAR amount");
-
         let mut project = self.projects.get(&project_id).expect("Project not found");
         assert!(project.status == "funding" || project.status == "in_progress", "Project is not accepting pledges");
-        assert!(project.raised.0 + amount <= project.goal.0, "Pledge exceeds project goal");
-
-        project.raised = U128(project.raised.0 + amount);
-        if project.status == "funding" {
-            project.status = "in_progress".to_string();
-        }
+        assert!(project.raised.saturating_add(amount) <= project.goal, "Pledge exceeds project goal");
+        project.raised += amount;
+        if project.status == "funding" { project.status = "in_progress".to_string(); }
         self.projects.insert(&project_id, &project);
     }
 
@@ -120,45 +127,40 @@ impl DreamFund {
         assert!(!evidence_hash.trim().is_empty(), "Evidence hash is required");
         let mut project = self.projects.get(&project_id).expect("Project not found");
         assert_eq!(env::predecessor_account_id(), project.owner, "Only the project owner can submit evidence");
-        assert!(project.status == "in_progress", "Project is not active");
+        assert_eq!(project.status, "in_progress", "Project is not active");
         assert!((project.milestone_index as usize) < project.milestones.len(), "No milestone remains");
         project.evidence_hash = Some(evidence_hash);
         self.projects.insert(&project_id, &project);
     }
 
+    /// Centralized hackathon-demo resolver. Pass pays one tranche; fail recycles
+    /// all still-locked project funds into the shared pool.
     pub fn resolve_milestone(&mut self, project_id: u64, pass: bool) {
         assert_eq!(env::predecessor_account_id(), self.owner, "Only the demo resolver can resolve milestones");
         let mut project = self.projects.get(&project_id).expect("Project not found");
         assert_eq!(project.status, "in_progress", "Project is not active");
         assert!(project.evidence_hash.is_some(), "Evidence must be submitted first");
-
         let index = project.milestone_index as usize;
         assert!(index < project.milestones.len(), "No milestone remains");
-
         if pass {
-            let tranche = project.milestones[index].amount.0;
-            let available = project.raised.0.saturating_sub(project.paid.0);
+            let tranche = project.milestones[index].amount;
+            let available = project.raised.saturating_sub(project.paid);
             assert!(available >= tranche, "Project has not raised enough for this tranche");
-
-            project.paid = U128(project.paid.0 + tranche);
+            project.paid += tranche;
             project.milestone_index += 1;
             project.evidence_hash = None;
-
             let rep = self.reputation.get(&project.owner).unwrap_or(0);
             self.reputation.insert(&project.owner, &(rep + 1));
-
             if (project.milestone_index as usize) >= project.milestones.len() {
                 project.status = "complete".to_string();
-                let surplus = project.raised.0.saturating_sub(project.paid.0);
-                self.pool_balance += surplus;
+                self.pool_balance = self.pool_balance.saturating_add(project.raised.saturating_sub(project.paid));
             }
-
             let recipient = project.owner.clone();
             self.projects.insert(&project_id, &project);
             Promise::new(recipient).transfer(NearToken::from_yoctonear(tranche));
         } else {
-            let remaining = project.raised.0.saturating_sub(project.paid.0);
-            self.pool_balance += remaining;
+            let remaining = project.raised.saturating_sub(project.paid);
+            self.pool_balance = self.pool_balance.saturating_add(remaining);
             project.status = "failed".to_string();
             project.failure_reason = Some("Milestone rejected by the demo resolver".to_string());
             project.evidence_hash = None;
@@ -166,19 +168,13 @@ impl DreamFund {
         }
     }
 
-    pub fn get_pool(&self) -> U128 {
-        U128(self.pool_balance)
+    pub fn get_pool(&self) -> U128 { U128(self.pool_balance) }
+    pub fn get_project(&self, project_id: u64) -> Option<ProjectView> {
+        self.projects.get(&project_id).map(|p| ProjectView::from(p.clone()))
     }
-
-    pub fn get_project(&self, project_id: u64) -> Option<Project> {
-        self.projects.get(&project_id)
+    pub fn get_projects(&self) -> Vec<ProjectView> {
+        self.project_ids.iter().filter_map(|id| self.projects.get(id).map(ProjectView::from)).collect()
     }
-
-    pub fn get_projects(&self) -> Vec<Project> {
-        self.project_ids.iter().filter_map(|id| self.projects.get(id)).collect()
-    }
-
-    pub fn get_reputation(&self, account: AccountId) -> u64 {
-        self.reputation.get(&account).unwrap_or(0)
-    }
+    pub fn get_reputation(&self, account: AccountId) -> u64 { self.reputation.get(&account).unwrap_or(0) }
+    pub fn get_owner(&self) -> AccountId { self.owner.clone() }
 }
