@@ -37,6 +37,7 @@ The Rust contract source is in `contract/`. Initial methods:
 - `get_project(project_id)`
 - `get_projects()`
 - `get_reputation(account)`
+- `get_owner()`
 
 ## Frontend
 
