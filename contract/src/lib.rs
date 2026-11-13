@@ -56,7 +56,7 @@ impl From<Project> for ProjectView {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct MilestoneInput { pub label: String, pub amount: U128 }
 
@@ -108,6 +108,28 @@ impl DreamFund {
         self.projects.insert(&id, &project);
         self.project_ids.push(id);
         id
+    }
+
+    /// Add NEAR to the unallocated shared community pool.
+    #[payable]
+    pub fn fund_pool(&mut self) {
+        let amount = env::attached_deposit().as_yoctonear();
+        assert!(amount > 0, "Attach a positive NEAR amount");
+        self.pool_balance = self.pool_balance.checked_add(amount).expect("Pool balance overflow");
+    }
+
+    /// The demo resolver assigns community-pool funds to a project's locked allocation.
+    pub fn allocate_from_pool(&mut self, project_id: u64, amount: U128) {
+        assert_eq!(env::predecessor_account_id(), self.owner, "Only the demo resolver can allocate pool funds");
+        assert!(amount.0 > 0, "Allocation must be positive");
+        assert!(self.pool_balance >= amount.0, "Insufficient community pool balance");
+        let mut project = self.projects.get(&project_id).expect("Project not found");
+        assert!(project.status == "funding" || project.status == "in_progress", "Project is not accepting funds");
+        assert!(project.raised.checked_add(amount.0).unwrap_or(u128::MAX) <= project.goal, "Allocation exceeds project goal");
+        self.pool_balance -= amount.0;
+        project.raised += amount.0;
+        project.status = "in_progress".to_string();
+        self.projects.insert(&project_id, &project);
     }
 
     /// Attach NEAR to pledge directly to a project's locked allocation.
