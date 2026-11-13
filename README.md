@@ -30,11 +30,11 @@ The Rust contract source is in `contract/`. Initial methods:
 
 - `new()`
 - `create_project(title, goal, milestones)`
-- `fund_pool()` — payable; contributes to the shared pool
-- `allocate_from_pool(project_id, amount)` — owner-only demo allocation from the shared pool
+- `fund_pool()` — payable; contributes to the shared pool (emits a `DREAMFUND_POOL_FUNDED` receipt log)
+- `allocate_from_pool(project_id, amount)` — owner-only demo allocation from the shared pool (emits `DREAMFUND_POOL_ALLOCATED`)
 - `pledge(project_id)` — payable direct project contribution
 - `submit_evidence(project_id, evidence_hash)`
-- `resolve_milestone(project_id, pass)`
+- `resolve_milestone(project_id, pass)` — emits payout or pool-recycling receipt logs
 - `get_pool()`
 - `get_project(project_id)`
 - `get_projects()`
@@ -45,10 +45,21 @@ The Rust contract source is in `contract/`. Initial methods:
 
 Static HTML/CSS/JS at the repository root. Configure `CONTRACT_ID` in `app.js` after deploying the contract, then deploy the static site (for example, with Vercel).
 
+## Deploy from a phone (GitHub Actions)
+
+1. Create a dedicated NEAR **testnet** account with a full-access key and fund it with faucet NEAR.
+2. In this repository open **Settings → Secrets and variables → Actions**.
+3. Add repository variable `NEAR_TESTNET_ACCOUNT_ID` with the account ID (for example, `dreamfund-demo.testnet`).
+4. Add repository secret `NEAR_TESTNET_PRIVATE_KEY` with that account's full-access private key. **Never paste the key into chat, an issue, or a commit.**
+5. Open **Actions → Deploy DreamFund to NEAR testnet → Run workflow**.
+6. The workflow builds the WASM, deploys it, initializes it, writes the public contract ID to `config.js`, and commits that config. Vercel then redeploys the frontend automatically.
+
+Use a dedicated testnet account only. The key is needed by the workflow to deploy and initialize the contract; it is not used by the public website.
+
 ## Deployment checklist
 
 - [ ] Build and deploy the Rust contract to a NEAR testnet account.
-- [ ] Set the deployed contract ID in `app.js`.
+- [ ] Confirm `config.js` contains the deployed testnet contract ID.
 - [ ] Connect with a testnet wallet.
 - [ ] Run both pass and fail paths with real testnet transactions.
 - [ ] Add explorer transaction links and the live demo URL here.
