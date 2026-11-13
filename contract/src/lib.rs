@@ -116,6 +116,7 @@ impl DreamFund {
         let amount = env::attached_deposit().as_yoctonear();
         assert!(amount > 0, "Attach a positive NEAR amount");
         self.pool_balance = self.pool_balance.checked_add(amount).expect("Pool balance overflow");
+        env::log_str(&format!("DREAMFUND_POOL_FUNDED amount={}", amount));
     }
 
     /// The demo resolver assigns community-pool funds to a project's locked allocation.
@@ -125,10 +126,12 @@ impl DreamFund {
         assert!(self.pool_balance >= amount.0, "Insufficient community pool balance");
         let mut project = self.projects.get(&project_id).expect("Project not found");
         assert!(project.status == "funding" || project.status == "in_progress", "Project is not accepting funds");
-        assert!(project.raised.checked_add(amount.0).unwrap_or(u128::MAX) <= project.goal, "Allocation exceeds project goal");
+        let new_raised = project.raised.checked_add(amount.0).expect("Project raised overflow");
+        assert!(new_raised <= project.goal, "Allocation exceeds project goal");
         self.pool_balance -= amount.0;
-        project.raised += amount.0;
+        project.raised = new_raised;
         project.status = "in_progress".to_string();
+        env::log_str(&format!("DREAMFUND_POOL_ALLOCATED project={} amount={}", project_id, amount.0));
         self.projects.insert(&project_id, &project);
     }
 
@@ -175,14 +178,20 @@ impl DreamFund {
             self.reputation.insert(&project.owner, &(rep + 1));
             if (project.milestone_index as usize) >= project.milestones.len() {
                 project.status = "complete".to_string();
-                self.pool_balance = self.pool_balance.saturating_add(project.raised.saturating_sub(project.paid));
+                let recycled = project.raised.saturating_sub(project.paid);
+                self.pool_balance = self.pool_balance.checked_add(recycled).expect("Pool balance overflow");
+                if recycled > 0 {
+                    env::log_str(&format!("DREAMFUND_POOL_RECYCLED project={} amount={} reason=completed_surplus", project_id, recycled));
+                }
             }
             let recipient = project.owner.clone();
             self.projects.insert(&project_id, &project);
+            env::log_str(&format!("DREAMFUND_MILESTONE_PAID project={} owner={} amount={}", project_id, recipient, tranche));
             Promise::new(recipient).transfer(NearToken::from_yoctonear(tranche));
         } else {
             let remaining = project.raised.saturating_sub(project.paid);
-            self.pool_balance = self.pool_balance.saturating_add(remaining);
+            self.pool_balance = self.pool_balance.checked_add(remaining).expect("Pool balance overflow");
+            env::log_str(&format!("DREAMFUND_POOL_RECYCLED project={} amount={} reason=milestone_rejected", project_id, remaining));
             project.status = "failed".to_string();
             project.failure_reason = Some("Milestone rejected by the demo resolver".to_string());
             project.evidence_hash = None;
