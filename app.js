@@ -144,6 +144,7 @@ async function renderProjects(projects) {
     const isOwner = wallet?.isSignedIn() && wallet.getAccountId() === project.owner;
     const isResolver = wallet?.isSignedIn() && wallet.getAccountId() === resolverAccount;
     node.querySelector(".btn-pledge").onclick = () => pledge(project.id);
+    node.querySelector(".btn-allocate").onclick = () => allocateFromPool(project.id);
     node.querySelector(".btn-evidence").onclick = () => submitEvidence(project.id);
     node.querySelector(".btn-pass").onclick = () => resolve(project.id, true);
     node.querySelector(".btn-fail").onclick = () => resolve(project.id, false);
@@ -151,12 +152,35 @@ async function renderProjects(projects) {
     node.querySelector(".btn-pass").hidden = !isResolver || !project.evidence_hash;
     node.querySelector(".btn-fail").hidden = !isResolver || !project.evidence_hash;
     node.querySelector(".btn-pledge").hidden = !wallet?.isSignedIn() || !["funding", "in_progress"].includes(project.status);
+    node.querySelector(".btn-allocate").hidden = !isResolver || !["funding", "in_progress"].includes(project.status);
     node.querySelector(".explorer-link").href = NETWORK.explorerUrl + "/address/" + encodeURIComponent(CONTRACT_ID);
     grid.appendChild(node);
   }
 }
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+async function fundPool() {
+  const amount = prompt("How much NEAR would you like to add to the shared community pool?");
+  if (!amount) return;
+  try {
+    showLoader("Adding funds to the community pool…");
+    const tx = await call("fund_pool", {}, nearToYocto(amount));
+    toast("Community pool funded · " + tx.transaction.hash.slice(0, 10) + "…");
+    await refresh();
+  } catch (e) { toast(e.message); }
+  finally { hideLoader(); }
+}
+async function allocateFromPool(id) {
+  const amount = prompt("How much NEAR should the community pool allocate to this project?");
+  if (!amount) return;
+  try {
+    showLoader("Allocating community funds…");
+    const tx = await call("allocate_from_pool", { project_id: Number(id), amount: nearToYocto(amount) });
+    toast("Pool allocation confirmed · " + tx.transaction.hash.slice(0, 10) + "…");
+    await refresh();
+  } catch (e) { toast(e.message); }
+  finally { hideLoader(); }
 }
 async function pledge(id) {
   const amount = prompt("How much NEAR would you like to pledge?");
@@ -217,5 +241,6 @@ $("create-form").addEventListener("submit", async (event) => {
   finally { hideLoader(); }
 });
 $("btn-connect").addEventListener("click", () => connectWallet().catch(e => toast(e.message)));
+$("btn-fund-pool").addEventListener("click", () => fundPool());
 $("btn-refresh").addEventListener("click", () => refresh());
 initWallet().catch((e) => { console.error(e); toast("Wallet setup failed: " + e.message); });
