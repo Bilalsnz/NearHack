@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#04140f" />
+  <meta name="description" content="A community public-goods pool that funds verified milestones and returns failed projects' remaining funds to the pool." />
+  <title>DreamFund — Community Public Goods</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+  <header class="top">
+    <div class="brand">
+      <div class="brand-mark">D</div>
+      <div>
+        <h1>DreamFund</h1>
+        <p class="tag">Public pool · verified milestones · failed capital returns to the community</p>
+      </div>
+    </div>
+    <div class="wallet-area">
+      <span id="network-label" class="network-pill">NEAR TESTNET</span>
+      <button id="btn-connect" class="btn primary">Connect testnet</button>
+      <span id="wallet-account" class="wallet-account"></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">COMMUNITY-POWERED PUBLIC GOODS</p>
+        <h2>Good ideas earn funding.<br><span>Failed projects return it.</span></h2>
+        <p class="hero-text">A shared pool funds projects in milestones. Evidence is submitted before a tranche can be released. If a project fails, its remaining locked allocation returns to the community.</p>
+      </div>
+      <div class="hero-stamp">
+        <span class="stamp-label">THE RULE</span>
+        <strong>PROVE IT.<br>THEN GET PAID.</strong>
+        <span class="stamp-foot">NEAR · TESTNET</span>
+      </div>
+    </section>
+
+    <section class="pool-bar">
+      <div class="card glass-panel">
+        <div class="pool-grid">
+          <div><span class="label">Available community pool</span><div class="big" id="pool-balance">— <small>NEAR</small></div></div>
+          <div><span class="label">Projects</span><div class="big" id="project-count">0</div></div>
+          <div><span class="label">Your delivery reputation</span><div class="big" id="my-rep">0</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-heading">
+      <div><p class="eyebrow">THE COMMUNITY PORTFOLIO</p><h2>Projects seeking proof</h2></div>
+      <button id="btn-refresh" class="btn quiet">↻ Refresh</button>
+    </section>
+    <section class="grid" id="project-grid">
+      <div class="empty-state">Connect your testnet wallet to load on-chain projects.</div>
+    </section>
+
+    <section class="create-wrap">
+      <div class="card glass-panel create-card">
+        <div class="create-intro">
+          <p class="eyebrow">BRING AN IDEA TO THE POOL</p>
+          <h2>Propose a public good</h2>
+          <p>Define the total funding goal and up to two measurable payment milestones.</p>
+          <div class="create-note">Funds are not paid upfront. Each tranche requires a submitted evidence hash and a resolver decision.</div>
+        </div>
+        <form id="create-form" class="create-form">
+          <label>Project title<input id="title" maxlength="80" required placeholder="e.g. Open NEAR tutorial site" /></label>
+          <label>Funding goal (NEAR)<input id="goal" type="number" min="0.01" step="0.01" required placeholder="5" /></label>
+          <div class="form-divider">MILESTONE 01</div>
+          <label>First milestone<input id="m1-label" maxlength="80" required placeholder="Publish the first 5 lessons" /></label>
+          <label>First tranche (NEAR)<input id="m1-amount" type="number" min="0.01" step="0.01" required placeholder="2" /></label>
+          <div class="form-divider">MILESTONE 02 · OPTIONAL</div>
+          <label>Second milestone<input id="m2-label" maxlength="80" placeholder="Launch the complete tutorial" /></label>
+          <label>Second tranche (NEAR)<input id="m2-amount" type="number" min="0" step="0.01" value="0" /></label>
+          <button class="btn primary full" type="submit">Create project ↗</button>
+        </form>
+      </div>
+    </section>
+    <footer><span>DreamFund · NEAR HACKATHON · SOCIAL MONEY</span><span>Testnet only · Resolver is centralized for this demo</span></footer>
+  </main>
+
+  <div id="loader-wrap" class="loader-wrap hidden" aria-live="polite" aria-busy="true">
+    <div class="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <p id="loader-text">Working on chain…</p>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+
+  <template id="card-template">
+    <article class="parent">
+      <div class="card project-card">
+        <div class="glass"></div>
+        <div class="content">
+          <div class="card-topline"><span class="project-id">PROJECT #00</span><span class="status-badge">FUNDING</span></div>
+          <span class="title project-title">Project title</span>
+          <span class="text project-meta">0 / 0 NEAR raised</span>
+          <div class="progress-track"><div class="progress-fill"></div></div>
+          <div class="milestones"></div>
+          <div class="evidence-display"></div>
+          <div class="owner-line"></div>
+          <div class="reputation-line"></div>
+        </div>
+        <div class="bottom">
+          <div class="actions">
+            <button class="btn small btn-pledge">Pledge</button>
+            <button class="btn small btn-evidence">Submit proof</button>
+            <button class="btn small pass btn-pass">Pass</button>
+            <button class="btn small fail btn-fail">Fail</button>
+          </div>
+          <a class="explorer-link" target="_blank" rel="noreferrer">Explorer ↗</a>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
