@@ -1,7 +1,7 @@
 import { connect, keyStores, WalletConnection, utils } from "https://esm.sh/near-api-js@5.1.1";
 
 // Replace this after deploying contract/src/lib.rs to NEAR testnet.
-const CONTRACT_ID = window.DREAMFUND_CONTRACT_ID || "REPLACE_WITH_YOUR_CONTRACT.testnet";
+const CONTRACT_ID = String(window.DREAMFUND_CONTRACT_ID || "").trim();
 const NETWORK = {
   networkId: "testnet",
   nodeUrl: "https://rpc.testnet.near.org",
@@ -42,8 +42,8 @@ function formatNear(value) {
   catch { return "0"; }
 }
 function ensureConfigured() {
-  if (CONTRACT_ID.startsWith("REPLACE_")) {
-    throw new Error("Contract not deployed/configured yet. Set CONTRACT_ID in app.js first.");
+  if (!CONTRACT_ID || CONTRACT_ID.startsWith("REPLACE_")) {
+    throw new Error("DreamFund is waiting for its NEAR testnet contract deployment. The contract address will be loaded from config.js automatically.");
   }
 }
 async function initWallet() {
@@ -93,9 +93,11 @@ async function call(methodName, args = {}, deposit = "0") {
   });
 }
 async function refresh() {
-  if (!near || CONTRACT_ID.startsWith("REPLACE_")) {
-    $("pool-balance").innerHTML = "— <small>NEAR</small>";
-    $("project-grid").innerHTML = '<div class="empty-state">Contract address not configured yet. Deploy the Rust contract and set CONTRACT_ID in app.js.</div>';
+  if (!near || !CONTRACT_ID || CONTRACT_ID.startsWith("REPLACE_")) {
+    $("pool-balance").innerHTML = "Not deployed <small>yet</small>";
+    $("project-count").textContent = "—";
+    $("my-rep").textContent = "—";
+    $("project-grid").innerHTML = '<div class="empty-state">The NEAR testnet contract has not been deployed yet. Once the deployment workflow succeeds, config.js will be updated automatically and projects will appear here.</div>';
     return;
   }
   try {
