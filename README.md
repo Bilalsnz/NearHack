@@ -43,7 +43,7 @@ The Rust contract source is in `contract/`. Initial methods:
 
 ## Frontend
 
-Static HTML/CSS/JS at the repository root. Configure `CONTRACT_ID` in `app.js` after deploying the contract, then deploy the static site (for example, with Vercel).
+Static HTML/CSS/JS at the repository root. The app reads the deployed account ID from `config.js`; the deployment workflow updates that file automatically.
 
 ## Deploy from a phone (GitHub Actions)
 
