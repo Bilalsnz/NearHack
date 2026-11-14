@@ -4,21 +4,21 @@ A public-goods funding pool where projects receive money in milestones. Successf
 
 ## Current status
 
-Working scaffold with shared-pool contributions, resolver allocation, direct pledges, evidence submission, milestone payout, and fail-to-pool recycling. Testnet deployment and end-to-end transaction validation are still pending. Do not treat this repository as deployed until the testnet contract address and live transaction links are added below.
+Community milestone voting is implemented alongside shared-pool contributions, direct pledges, evidence submission, milestone payouts, and fail-to-pool recycling. Testnet deployment and end-to-end transaction validation are still required for this voting upgrade.
 
 ## Core demo
 
 1. Connect a NEAR **testnet** wallet.
 2. Create or open two projects.
-3. Add testnet NEAR to the shared pool, then have the demo resolver allocate funds to projects. Direct project pledges are also supported.
+3. Add testnet NEAR to the shared pool, then the pool allocation function is currently contract-owner controlled; direct pledges are also supported. Direct project pledges are also supported.
 4. Submit an evidence hash for a project's current milestone.
-5. The demo resolver approves one milestone and the contract pays its tranche to the project owner.
-6. The resolver fails the other project and its remaining locked funds return to the community pool.
+5. Five eligible community accounts vote on the submitted milestone. A majority approves the tranche or rejects the project and recycles its remaining locked funds.
+6. A rejected milestone returns the project's remaining locked funds to the community pool.
 7. Inspect the resulting transactions on NEAR testnet explorer.
 
 ## Honest limitations
 
-- Milestone resolution is controlled by the contract owner for this hackathon demo. It is **not decentralized arbitration or a full DAO**.
+- Milestone decisions use one vote per NEAR account, with a five-account quorum and simple majority. This is community voting, not Sybil-resistant governance: one person can control multiple accounts. It is not a full DAO.
 - Projects support at most two milestones.
 - Reputation counts successful milestone releases only.
 - Funds already paid to a project owner cannot be clawed back. Only funds still held by the contract can return to the pool.
@@ -34,7 +34,9 @@ The Rust contract source is in `contract/`. Initial methods:
 - `allocate_from_pool(project_id, amount)` — owner-only demo allocation from the shared pool (emits `DREAMFUND_POOL_ALLOCATED`)
 - `pledge(project_id)` — payable direct project contribution
 - `submit_evidence(project_id, evidence_hash)`
-- `resolve_milestone(project_id, pass)` — emits payout or pool-recycling receipt logs
+- `vote_milestone(project_id, approve)` — one vote per account per milestone; five votes trigger majority-based payout or pool recycling
+- `get_milestone_votes(project_id)` — current approve/reject/total counts
+- `get_my_milestone_vote(project_id, voter)` — checks whether an account has voted on the active milestone
 - `get_pool()`
 - `get_project(project_id)`
 - `get_projects()`
