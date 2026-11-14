@@ -18,9 +18,28 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install WASM optimizer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+
       - name: Build contract
         working-directory: contract
         run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Optimize contract WASM
+        run: |
+          WASM="contract/target/wasm32-unknown-unknown/release/dreamfund.wasm"
+
+          echo "WASM size before optimization:"
+          ls -lh "$WASM"
+
+          wasm-opt -Oz --strip-debug "$WASM" -o /tmp/dreamfund-optimized.wasm
+
+          mv /tmp/dreamfund-optimized.wasm "$WASM"
+
+          echo "WASM size after optimization:"
+          ls -lh "$WASM"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -72,7 +91,7 @@ jobs:
           });
           console.log("INIT_TX=" + initialized.transaction.hash);
 
-          await writeFile("config.js", "// Public deployment configuration. Updated by the deploy-contract workflow.\nwindow.DREAMFUND_CONTRACT_ID = " + JSON.stringify(accountId) + ";\n");
+          await writeFile("config.js", "// Public deployment configuration. Updated by the deploy-contract workflow.\\nwindow.DREAMFUND_CONTRACT_ID = " + JSON.stringify(accountId) + ";\\n");
           console.log("Configured frontend for", accountId);
           EOF
           node /tmp/near-deploy/deploy.mjs
