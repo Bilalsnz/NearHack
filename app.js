@@ -1,6 +1,11 @@
 import { connect, keyStores, utils } from "https://esm.sh/near-api-js@5.1.1";
 import { setupWalletSelector, actionCreators } from "https://esm.sh/@near-wallet-selector/core@10.1.4";
 import { setupMeteorWalletApp } from "https://esm.sh/@near-wallet-selector/meteor-wallet-app@10.1.4";
+import { setupMeteorWallet } from "https://esm.sh/@near-wallet-selector/meteor-wallet@10.1.4";
+import { setupMyNearWallet } from "https://esm.sh/@near-wallet-selector/my-near-wallet@10.1.4";
+import { setupSender } from "https://esm.sh/@near-wallet-selector/sender@10.1.4";
+import { setupHereWallet } from "https://esm.sh/@near-wallet-selector/here-wallet@10.1.4";
+import { setupNightly } from "https://esm.sh/@near-wallet-selector/nightly@10.1.4";
 
 // Replace this after deploying contract/src/lib.rs to NEAR testnet.
 const CONTRACT_ID = String(window.DREAMFUND_CONTRACT_ID || "").trim();
@@ -15,6 +20,7 @@ const GAS = "30000000000000";
 let near;
 let selector;
 let wallet;
+let activeWalletId = null;
 let accountId = null;
 let resolverAccount = null;
 let toastTimer;
@@ -54,35 +60,70 @@ function updateWalletUI() {
   $("wallet-account").textContent = accountId || "";
 }
 async function initWallet() {
+  // Public project data must load even when the visitor has no wallet or the
+  // current browser cannot initialize a particular wallet connector.
   near = await connect({ ...NETWORK, keyStore: new keyStores.BrowserLocalStorageKeyStore() });
   ensureConfigured();
-  selector = await setupWalletSelector({
-    network: "testnet",
-    modules: [setupMeteorWalletApp({ contractId: CONTRACT_ID })]
-  });
-  const savedAccounts = selector.store.getState().accounts || [];
-  if (savedAccounts.length) {
-    wallet = await selector.wallet("meteor-wallet-app");
-    accountId = savedAccounts[0].accountId;
+  await refresh();
+
+  try {
+    selector = await setupWalletSelector({
+      network: "testnet",
+      modules: [
+        setupMeteorWalletApp({ contractId: CONTRACT_ID }),
+        setupMeteorWallet(),
+        setupMyNearWallet({ walletUrl: "https://testnet.mynearwallet.com" }),
+        setupSender(),
+        setupHereWallet(),
+        setupNightly()
+      ]
+    });
+    const state = selector.store.getState();
+    const savedAccounts = state.accounts || [];
+    const selectedWalletId = state.selectedWalletId;
+    if (savedAccounts.length && selectedWalletId) {
+      wallet = await selector.wallet(selectedWalletId);
+      activeWalletId = selectedWalletId;
+      accountId = savedAccounts[0].accountId;
+    }
+  } catch (error) {
+    // Do not let a wallet-specific setup failure hide the public portfolio.
+    console.warn("Wallet connectors unavailable in this browser:", error);
   }
   updateWalletUI();
-  await refresh();
 }
 async function connectWallet() {
-  if (!selector) throw new Error("Meteor connection is still loading. Please try again.");
+  if (!selector) throw new Error("Wallet connections are unavailable in this browser. You can still browse public projects.");
   if (accountId && wallet) {
     await wallet.signOut();
     wallet = null;
+    activeWalletId = null;
     accountId = null;
     updateWalletUI();
     await refresh();
     return;
   }
   ensureConfigured();
-  wallet = await selector.wallet("meteor-wallet-app");
+  const choices = [
+    ["Meteor Wallet App (open inside Meteor)", "meteor-wallet-app"],
+    ["Meteor Wallet browser extension", "meteor-wallet"],
+    ["My NEAR Wallet", "my-near-wallet"],
+    ["Sender Wallet", "sender"],
+    ["HERE Wallet", "here-wallet"],
+    ["Nightly Wallet", "nightly"]
+  ];
+  const menu = choices.map(([label], i) => `${i + 1}. ${label}`).join("\\n");
+  const answer = prompt("Choose your NEAR wallet:\\n\\n" + menu + "\\n\\nEnter a number:");
+  if (answer === null) return;
+  const choice = Number(answer);
+  if (!Number.isInteger(choice) || choice < 1 || choice > choices.length) {
+    throw new Error("Choose a wallet by entering a number from 1 to " + choices.length + ".");
+  }
+  activeWalletId = choices[choice - 1][1];
+  wallet = await selector.wallet(activeWalletId);
   const accounts = await wallet.signIn({ contractId: CONTRACT_ID, methodNames: [] });
   const selected = accounts?.[0] || (await wallet.getAccounts())[0];
-  if (!selected?.accountId) throw new Error("Meteor did not return an account. Open DreamFund inside the Meteor app and approve the connection.");
+  if (!selected?.accountId) throw new Error("The wallet did not return an account. Approve the connection in your wallet and try again.");
   accountId = selected.accountId;
   updateWalletUI();
   await refresh();
