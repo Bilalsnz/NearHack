@@ -144,15 +144,20 @@ async function renderProjects(projects) {
     const founderRep = await view("get_reputation", { account: project.owner });
     node.querySelector(".reputation-line").textContent = "Verified deliveries: " + founderRep;
     const isOwner = wallet?.isSignedIn() && wallet.getAccountId() === project.owner;
-    const isResolver = wallet?.isSignedIn() && wallet.getAccountId() === resolverAccount;
+    const isFounder = wallet?.isSignedIn() && wallet.getAccountId() === project.owner;
+    const voteCounts = await view("get_milestone_votes", { project_id: Number(project.id) });
+    const myVote = wallet?.isSignedIn() ? await view("get_my_milestone_vote", { project_id: Number(project.id), voter: wallet.getAccountId() }) : null;
     node.querySelector(".btn-pledge").onclick = () => pledge(project.id);
     node.querySelector(".btn-allocate").onclick = () => allocateFromPool(project.id);
     node.querySelector(".btn-evidence").onclick = () => submitEvidence(project.id);
-    node.querySelector(".btn-pass").onclick = () => resolve(project.id, true);
-    node.querySelector(".btn-fail").onclick = () => resolve(project.id, false);
+    node.querySelector(".btn-vote-yes").onclick = () => voteMilestone(project.id, true);
+    node.querySelector(".btn-vote-no").onclick = () => voteMilestone(project.id, false);
+    node.querySelector(".vote-display").textContent = `Community votes: ${voteCounts[0]} approve · ${voteCounts[1]} reject · ${voteCounts[2]}/5 cast`;
     node.querySelector(".btn-evidence").hidden = !isOwner || project.status !== "in_progress";
-    node.querySelector(".btn-pass").hidden = !isResolver || !project.evidence_hash;
-    node.querySelector(".btn-fail").hidden = !isResolver || !project.evidence_hash;
+    const votingOpen = project.status === "in_progress" && Boolean(project.evidence_hash) && !isFounder && wallet?.isSignedIn() && voteCounts[2] < 5 && myVote === null;
+    node.querySelector(".btn-vote-yes").hidden = !votingOpen;
+    node.querySelector(".btn-vote-no").hidden = !votingOpen;
+    if (myVote !== null) node.querySelector(".vote-display").textContent += myVote ? " · You voted approve" : " · You voted reject";
     node.querySelector(".btn-pledge").hidden = !wallet?.isSignedIn() || !["funding", "in_progress"].includes(project.status);
     node.querySelector(".btn-allocate").hidden = !isResolver || !["funding", "in_progress"].includes(project.status);
     node.querySelector(".explorer-link").href = NETWORK.explorerUrl + "/address/" + encodeURIComponent(CONTRACT_ID);
@@ -212,13 +217,13 @@ async function submitEvidence(id) {
   } catch (e) { toast(e.message); }
   finally { hideLoader(); }
 }
-async function resolve(id, pass) {
-  const action = pass ? "PASS this milestone and release its tranche?" : "FAIL this project and return its remaining locked funds to the pool?";
-  if (!confirm(action)) return;
+async function voteMilestone(id, approve) {
+  const choice = approve ? "APPROVE this milestone" : "REJECT this milestone";
+  if (!confirm(`Cast your one-time community vote to ${choice}? Five eligible accounts are required to decide.`)) return;
   try {
-    showLoader(pass ? "Releasing verified milestone…" : "Returning remaining funds to the pool…");
-    const tx = await call("resolve_milestone", { project_id: Number(id), pass });
-    toast((pass ? "Milestone passed" : "Funds returned to pool") + " · " + tx.transaction.hash.slice(0, 10) + "…");
+    showLoader("Recording your community vote…");
+    const tx = await call("vote_milestone", { project_id: Number(id), approve });
+    toast("Vote recorded on NEAR · " + tx.transaction.hash.slice(0, 10) + "…");
     await refresh();
   } catch (e) { toast(e.message); }
   finally { hideLoader(); }
