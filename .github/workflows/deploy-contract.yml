@@ -81,15 +81,22 @@ jobs:
           const deployed = await account.deployContract(wasm);
           console.log("DEPLOY_TX=" + deployed.transaction.hash);
 
-          console.log("Initializing DreamFund (pool starts at zero)");
-          const initialized = await account.functionCall({
-            contractId: accountId,
-            methodName: "new",
-            args: {},
-            gas: 30000000000000n,
-            attachedDeposit: 0n
-          });
-          console.log("INIT_TX=" + initialized.transaction.hash);
+          let initialized = false;
+          try {
+            await account.viewFunction({ contractId: accountId, methodName: "get_owner", args: {} });
+            console.log("Existing DreamFund state detected; preserving it during contract upgrade.");
+          } catch {
+            console.log("Initializing new DreamFund deployment (pool starts at zero)");
+            const initTx = await account.functionCall({
+              contractId: accountId,
+              methodName: "new",
+              args: {},
+              gas: 30000000000000n,
+              attachedDeposit: 0n
+            });
+            console.log("INIT_TX=" + initTx.transaction.hash);
+            initialized = true;
+          }
 
           await writeFile("config.js", "// Public deployment configuration. Updated by the deploy-contract workflow.\nwindow.DREAMFUND_CONTRACT_ID = " + JSON.stringify(accountId) + ";\n");
           console.log("Configured frontend for", accountId);
