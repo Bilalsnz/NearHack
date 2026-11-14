@@ -1,4 +1,6 @@
-import { connect, keyStores, WalletConnection, utils } from "https://esm.sh/near-api-js@5.1.1";
+import { connect, keyStores, utils } from "https://esm.sh/near-api-js@5.1.1";
+import { setupWalletSelector } from "https://esm.sh/@near-wallet-selector/core@10.1.4";
+import { setupMeteorWalletApp } from "https://esm.sh/@near-wallet-selector/meteor-wallet-app@10.1.4";
 
 // Replace this after deploying contract/src/lib.rs to NEAR testnet.
 const CONTRACT_ID = String(window.DREAMFUND_CONTRACT_ID || "").trim();
@@ -11,8 +13,9 @@ const NETWORK = {
 };
 const GAS = "30000000000000";
 let near;
+let selector;
 let wallet;
-let account;
+let accountId = null;
 let resolverAccount = null;
 let toastTimer;
 
@@ -46,24 +49,43 @@ function ensureConfigured() {
     throw new Error("DreamFund is waiting for its NEAR testnet contract deployment. The contract address will be loaded from config.js automatically.");
   }
 }
+function updateWalletUI() {
+  $("btn-connect").textContent = accountId ? "Disconnect" : "Connect Meteor Wallet";
+  $("wallet-account").textContent = accountId || "";
+}
 async function initWallet() {
   near = await connect({ ...NETWORK, keyStore: new keyStores.BrowserLocalStorageKeyStore() });
-  wallet = new WalletConnection(near, "dreamfund");
-  account = wallet.account();
-  if (wallet.isSignedIn()) {
-    $("btn-connect").textContent = "Disconnect";
-    $("wallet-account").textContent = wallet.getAccountId();
+  ensureConfigured();
+  selector = await setupWalletSelector({
+    network: "testnet",
+    modules: [setupMeteorWalletApp({ contractId: CONTRACT_ID })]
+  });
+  const savedAccounts = selector.store.getState().accounts || [];
+  if (savedAccounts.length) {
+    wallet = await selector.wallet("meteor-wallet-app");
+    accountId = savedAccounts[0].accountId;
   }
+  updateWalletUI();
   await refresh();
 }
 async function connectWallet() {
-  if (wallet?.isSignedIn()) {
-    wallet.signOut();
-    location.reload();
+  if (!selector) throw new Error("Meteor connection is still loading. Please try again.");
+  if (accountId && wallet) {
+    await wallet.signOut();
+    wallet = null;
+    accountId = null;
+    updateWalletUI();
+    await refresh();
     return;
   }
   ensureConfigured();
-  wallet.requestSignIn({ contractId: CONTRACT_ID, methodNames: [] });
+  wallet = await selector.wallet("meteor-wallet-app");
+  const accounts = await wallet.signIn({ contractId: CONTRACT_ID, methodNames: [] });
+  const selected = accounts?.[0] || (await wallet.getAccounts())[0];
+  if (!selected?.accountId) throw new Error("Meteor did not return an account. Open DreamFund inside the Meteor app and approve the connection.");
+  accountId = selected.accountId;
+  updateWalletUI();
+  await refresh();
 }
 async function view(methodName, args = {}) {
   const provider = near.connection.provider;
@@ -83,13 +105,14 @@ const Bufferless = {
 };
 async function call(methodName, args = {}, deposit = "0") {
   ensureConfigured();
-  if (!wallet?.isSignedIn()) throw new Error("Connect your NEAR testnet wallet first");
-  return account.functionCall({
-    contractId: CONTRACT_ID,
-    methodName,
-    args,
-    gas: BigInt(GAS),
-    attachedDeposit: BigInt(deposit)
+  if (!wallet || !accountId) throw new Error("Connect your Meteor testnet wallet first");
+  return wallet.signAndSendTransaction({
+    signerId: accountId,
+    receiverId: CONTRACT_ID,
+    actions: [{
+      type: "FunctionCall",
+      params: { methodName, args, gas: GAS, deposit }
+    }]
   });
 }
 async function refresh() {
@@ -109,8 +132,8 @@ async function refresh() {
     resolverAccount = resolver;
     $("pool-balance").innerHTML = `${formatNear(pool)} <small>NEAR</small>`;
     $("project-count").textContent = projects.length;
-    $("my-rep").textContent = wallet?.isSignedIn()
-      ? await view("get_reputation", { account: wallet.getAccountId() })
+    $("my-rep").textContent = Boolean(accountId)
+      ? await view("get_reputation", { account: accountId })
       : "—";
     await renderProjects(projects);
   } catch (error) {
@@ -143,11 +166,11 @@ async function renderProjects(projects) {
     node.querySelector(".owner-line").textContent = "Founder: " + project.owner;
     const founderRep = await view("get_reputation", { account: project.owner });
     node.querySelector(".reputation-line").textContent = "Verified deliveries: " + founderRep;
-    const isOwner = wallet?.isSignedIn() && wallet.getAccountId() === project.owner;
+    const isOwner = Boolean(accountId) && accountId === project.owner;
     const isFounder = isOwner;
-    const isResolver = wallet?.isSignedIn() && wallet.getAccountId() === resolverAccount;
+    const isResolver = Boolean(accountId) && accountId === resolverAccount;
     const voteCounts = await view("get_milestone_votes", { project_id: Number(project.id) });
-    const myVote = wallet?.isSignedIn() ? await view("get_my_milestone_vote", { project_id: Number(project.id), voter: wallet.getAccountId() }) : null;
+    const myVote = Boolean(accountId) ? await view("get_my_milestone_vote", { project_id: Number(project.id), voter: accountId }) : null;
     node.querySelector(".btn-pledge").onclick = () => pledge(project.id);
     node.querySelector(".btn-allocate").onclick = () => allocateFromPool(project.id);
     node.querySelector(".btn-evidence").onclick = () => submitEvidence(project.id);
@@ -155,11 +178,11 @@ async function renderProjects(projects) {
     node.querySelector(".btn-vote-no").onclick = () => voteMilestone(project.id, false);
     node.querySelector(".vote-display").textContent = `Community votes: ${voteCounts[0]} approve · ${voteCounts[1]} reject · ${voteCounts[2]}/5 cast`;
     node.querySelector(".btn-evidence").hidden = !isOwner || project.status !== "in_progress";
-    const votingOpen = project.status === "in_progress" && Boolean(project.evidence_hash) && !isFounder && wallet?.isSignedIn() && voteCounts[2] < 5 && myVote === null;
+    const votingOpen = project.status === "in_progress" && Boolean(project.evidence_hash) && !isFounder && Boolean(accountId) && voteCounts[2] < 5 && myVote === null;
     node.querySelector(".btn-vote-yes").hidden = !votingOpen;
     node.querySelector(".btn-vote-no").hidden = !votingOpen;
     if (myVote !== null) node.querySelector(".vote-display").textContent += myVote ? " · You voted approve" : " · You voted reject";
-    node.querySelector(".btn-pledge").hidden = !wallet?.isSignedIn() || !["funding", "in_progress"].includes(project.status);
+    node.querySelector(".btn-pledge").hidden = !Boolean(accountId) || !["funding", "in_progress"].includes(project.status);
     node.querySelector(".btn-allocate").hidden = !isResolver || !["funding", "in_progress"].includes(project.status);
     node.querySelector(".explorer-link").href = NETWORK.explorerUrl + "/address/" + encodeURIComponent(CONTRACT_ID);
     grid.appendChild(node);
