@@ -1,5 +1,5 @@
 import { connect, keyStores, utils } from "https://esm.sh/near-api-js@5.1.1";
-import { setupWalletSelector } from "https://esm.sh/@near-wallet-selector/core@10.1.4";
+import { setupWalletSelector, actionCreators } from "https://esm.sh/@near-wallet-selector/core@10.1.4";
 import { setupMeteorWalletApp } from "https://esm.sh/@near-wallet-selector/meteor-wallet-app@10.1.4";
 
 // Replace this after deploying contract/src/lib.rs to NEAR testnet.
@@ -109,10 +109,7 @@ async function call(methodName, args = {}, deposit = "0") {
   return wallet.signAndSendTransaction({
     signerId: accountId,
     receiverId: CONTRACT_ID,
-    actions: [{
-      type: "FunctionCall",
-      params: { methodName, args, gas: GAS, deposit }
-    }]
+    actions: [actionCreators.functionCall(methodName, args, BigInt(GAS), BigInt(deposit))]
   });
 }
 async function refresh() {
