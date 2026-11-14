@@ -48,7 +48,7 @@
         </div>
         <div class="pool-actions">
           <button id="btn-fund-pool" class="btn primary">Add NEAR to community pool ↗</button>
-          <span class="pool-note">Anyone can contribute. Only the demo resolver allocates shared funds.</span>
+          <span class="pool-note">Anyone can contribute. Milestone decisions require five community votes.</span>
         </div>
       </div>
     </section>
@@ -67,7 +67,7 @@
           <p class="eyebrow">BRING AN IDEA TO THE POOL</p>
           <h2>Propose a public good</h2>
           <p>Define the total funding goal and up to two measurable payment milestones.</p>
-          <div class="create-note">Funds are not paid upfront. Each tranche requires a submitted evidence hash and a resolver decision.</div>
+          <div class="create-note">Funds are not paid upfront. Each tranche requires submitted evidence and a five-account community vote.</div>
         </div>
         <form id="create-form" class="create-form">
           <label>Project title<input id="title" maxlength="80" required placeholder="e.g. Open NEAR tutorial site" /></label>
@@ -82,7 +82,7 @@
         </form>
       </div>
     </section>
-    <footer><span>DreamFund · NEAR HACKATHON · SOCIAL MONEY</span><span>Testnet only · Resolver is centralized for this demo</span></footer>
+    <footer><span>DreamFund · NEAR HACKATHON · SOCIAL MONEY</span><span>Testnet only · one vote per account · five votes per milestone</span></footer>
   </main>
 
   <div id="loader-wrap" class="loader-wrap hidden" aria-live="polite" aria-busy="true">
@@ -102,6 +102,7 @@
           <div class="progress-track"><div class="progress-fill"></div></div>
           <div class="milestones"></div>
           <div class="evidence-display"></div>
+          <div class="vote-display"></div>
           <div class="owner-line"></div>
           <div class="reputation-line"></div>
         </div>
@@ -110,8 +111,8 @@
             <button class="btn small btn-pledge">Pledge</button>
             <button class="btn small btn-allocate">Allocate pool</button>
             <button class="btn small btn-evidence">Submit proof</button>
-            <button class="btn small pass btn-pass">Pass</button>
-            <button class="btn small fail btn-fail">Fail</button>
+            <button class="btn small pass btn-vote-yes">Vote approve</button>
+            <button class="btn small fail btn-vote-no">Vote reject</button>
           </div>
           <a class="explorer-link" target="_blank" rel="noreferrer">Explorer ↗</a>
         </div>
