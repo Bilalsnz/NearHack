@@ -56,7 +56,7 @@ function ensureConfigured() {
   }
 }
 function updateWalletUI() {
-  $("btn-connect").textContent = accountId ? "Disconnect" : "Connect Meteor Wallet";
+  $("btn-connect").textContent = accountId ? "Disconnect" : "Connect NEAR Wallet";
   $("wallet-account").textContent = accountId || "";
 }
 async function initWallet() {
@@ -91,6 +91,7 @@ async function initWallet() {
     console.warn("Wallet connectors unavailable in this browser:", error);
   }
   updateWalletUI();
+  if (accountId) await refresh();
 }
 async function connectWallet() {
   if (!selector) throw new Error("Wallet connections are unavailable in this browser. You can still browse public projects.");
