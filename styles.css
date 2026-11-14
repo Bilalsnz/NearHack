@@ -26,3 +26,5 @@ footer{display:flex;justify-content:space-between;gap:15px;padding:22px 0 30px;b
 /* Mobile polish and clearer card hierarchy */
 @media(max-width:760px){.top{gap:14px}.brand{align-items:flex-start}.brand-mark{flex:0 0 42px}.wallet-area{width:100%;gap:9px}.network-pill{font-size:.6rem}.btn{min-height:44px}.pool-bar{margin-bottom:34px}.project-card{border-radius:24px}.content{padding:19px 18px 112px}.bottom{align-items:flex-end}.actions{max-width:100%}.explorer-link{padding-bottom:8px}}
 @media(max-width:420px){.pool-actions .btn{width:100%}.pool-note{line-height:1.5}.section-heading{align-items:center}.parent{min-height:365px}.project-card{min-height:365px}}
+
+.vote-display{font-size:.67rem;color:#075d3d;margin-top:8px;font-weight:800}
