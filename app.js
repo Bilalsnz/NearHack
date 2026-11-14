@@ -105,6 +105,11 @@ async function connectWallet() {
     return;
   }
   ensureConfigured();
+  // Reuse the last wallet choice. When there is no previous choice, try
+  // Meteor Wallet App first (the common path when DreamFund is opened inside
+  // Meteor). Only show the wallet picker if that direct connection fails.
+  const state = selector.store.getState();
+  const preferredWalletId = state.selectedWalletId || "meteor-wallet-app";
   const choices = [
     ["Meteor Wallet App (open inside Meteor)", "meteor-wallet-app"],
     ["Meteor Wallet browser extension", "meteor-wallet"],
@@ -113,19 +118,29 @@ async function connectWallet() {
     ["HERE Wallet", "here-wallet"],
     ["Nightly Wallet", "nightly"]
   ];
-  const menu = choices.map(([label], i) => `${i + 1}. ${label}`).join("\n");
-  const answer = prompt("Choose your NEAR wallet:\n\n" + menu + "\n\nEnter the wallet number:");
-  if (answer === null) return;
-  const choice = Number(answer);
-  if (!Number.isInteger(choice) || choice < 1 || choice > choices.length) {
-    throw new Error("Choose a wallet by entering a number from 1 to " + choices.length + ".");
+  const tryConnect = async (walletId) => {
+    const candidate = await selector.wallet(walletId);
+    const accounts = await candidate.signIn({ contractId: CONTRACT_ID, methodNames: [] });
+    const selected = accounts?.[0] || (await candidate.getAccounts())[0];
+    if (!selected?.accountId) throw new Error("The wallet did not return an account.");
+    wallet = candidate;
+    activeWalletId = walletId;
+    accountId = selected.accountId;
+  };
+
+  try {
+    await tryConnect(preferredWalletId);
+  } catch (directError) {
+    console.info("Preferred wallet connection did not complete; offering wallet choices.", directError);
+    const menu = choices.map(([label], i) => `${i + 1}. ${label}`).join("\n");
+    const answer = prompt("Meteor could not connect automatically. Choose your NEAR wallet:\n\n" + menu + "\n\nEnter the wallet number:");
+    if (answer === null) return;
+    const choice = Number(answer);
+    if (!Number.isInteger(choice) || choice < 1 || choice > choices.length) {
+      throw new Error("Choose a wallet by entering a number from 1 to " + choices.length + ".");
+    }
+    await tryConnect(choices[choice - 1][1]);
   }
-  activeWalletId = choices[choice - 1][1];
-  wallet = await selector.wallet(activeWalletId);
-  const accounts = await wallet.signIn({ contractId: CONTRACT_ID, methodNames: [] });
-  const selected = accounts?.[0] || (await wallet.getAccounts())[0];
-  if (!selected?.accountId) throw new Error("The wallet did not return an account. Approve the connection in your wallet and try again.");
-  accountId = selected.accountId;
   updateWalletUI();
   await refresh();
 }
