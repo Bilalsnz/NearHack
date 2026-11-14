@@ -11,7 +11,7 @@ import { setupNightly } from "https://esm.sh/@near-wallet-selector/nightly@10.1.
 const CONTRACT_ID = String(window.DREAMFUND_CONTRACT_ID || "").trim();
 const NETWORK = {
   networkId: "testnet",
-  nodeUrl: "https://rpc.testnet.near.org",
+  nodeUrl: "https://rpc.testnet.fastnear.com",
   walletUrl: "https://wallet.testnet.near.org",
   helperUrl: "https://helper.testnet.near.org",
   explorerUrl: "https://testnet.nearblocks.io"
@@ -84,7 +84,7 @@ async function initWallet() {
   // must never prevent the public portfolio from loading.
   try {
     selector = await setupWalletSelector({
-      network: "testnet",
+      network: NETWORK,
       modules: [
         setupMeteorWalletApp({ contractId: CONTRACT_ID }),
         setupMeteorWallet(),
