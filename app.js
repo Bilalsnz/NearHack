@@ -144,7 +144,8 @@ async function renderProjects(projects) {
     const founderRep = await view("get_reputation", { account: project.owner });
     node.querySelector(".reputation-line").textContent = "Verified deliveries: " + founderRep;
     const isOwner = wallet?.isSignedIn() && wallet.getAccountId() === project.owner;
-    const isFounder = wallet?.isSignedIn() && wallet.getAccountId() === project.owner;
+    const isFounder = isOwner;
+    const isResolver = wallet?.isSignedIn() && wallet.getAccountId() === resolverAccount;
     const voteCounts = await view("get_milestone_votes", { project_id: Number(project.id) });
     const myVote = wallet?.isSignedIn() ? await view("get_my_milestone_vote", { project_id: Number(project.id), voter: wallet.getAccountId() }) : null;
     node.querySelector(".btn-pledge").onclick = () => pledge(project.id);
