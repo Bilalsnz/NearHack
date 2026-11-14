@@ -60,6 +60,11 @@ impl From<Project> for ProjectView {
 #[serde(crate = "near_sdk::serde")]
 pub struct MilestoneInput { pub label: String, pub amount: U128 }
 
+#[derive(BorshDeserialize, BorshSerialize, Clone, Default)]
+pub struct VoteTally { pub approve: u8, pub reject: u8, pub total: u8 }
+
+const MILESTONE_VOTE_QUORUM: u8 = 5;
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct DreamFund {
@@ -159,15 +164,48 @@ impl DreamFund {
         self.projects.insert(&project_id, &project);
     }
 
-    /// Centralized hackathon-demo resolver. Pass pays one tranche; fail recycles
-    /// all still-locked project funds into the shared pool.
-    pub fn resolve_milestone(&mut self, project_id: u64, pass: bool) {
-        assert_eq!(env::predecessor_account_id(), self.owner, "Only the demo resolver can resolve milestones");
-        let mut project = self.projects.get(&project_id).expect("Project not found");
+    /// One vote per non-founder account. Five accounts trigger majority resolution.
+    pub fn vote_milestone(&mut self, project_id: u64, approve: bool) -> bool {
+        let voter = env::predecessor_account_id();
+        let project = self.projects.get(&project_id).expect("Project not found");
         assert_eq!(project.status, "in_progress", "Project is not active");
         assert!(project.evidence_hash.is_some(), "Evidence must be submitted first");
+        assert!((project.milestone_index as usize) < project.milestones.len(), "No milestone remains");
+        assert_ne!(voter, project.owner, "Project owners cannot vote on their own milestones");
+
+        let index = project.milestone_index;
+        let mut votes: LookupMap<(u64, u8, AccountId), bool> = LookupMap::new(b"mv");
+        let mut tallies: LookupMap<(u64, u8), VoteTally> = LookupMap::new(b"mt");
+        let vote_key = (project_id, index, voter.clone());
+        assert!(votes.get(&vote_key).is_none(), "You have already voted on this milestone");
+        let mut tally = tallies.get(&(project_id, index)).unwrap_or_default();
+        assert!(tally.total < MILESTONE_VOTE_QUORUM, "Voting is already closed");
+        if approve { tally.approve += 1; } else { tally.reject += 1; }
+        tally.total += 1;
+        votes.insert(&vote_key, &approve);
+        tallies.insert(&(project_id, index), &tally);
+        env::log_str(&format!("DREAMFUND_MILESTONE_VOTE project={} milestone={} approve={} total={}", project_id, index, approve, tally.total));
+        if tally.total == MILESTONE_VOTE_QUORUM {
+            self.finalize_milestone(project_id, project, tally.approve > tally.reject);
+            true
+        } else { false }
+    }
+
+    pub fn get_milestone_votes(&self, project_id: u64) -> (u8, u8, u8) {
+        let project = self.projects.get(&project_id).expect("Project not found");
+        let tallies: LookupMap<(u64, u8), VoteTally> = LookupMap::new(b"mt");
+        let tally = tallies.get(&(project_id, project.milestone_index)).unwrap_or_default();
+        (tally.approve, tally.reject, tally.total)
+    }
+
+    pub fn get_my_milestone_vote(&self, project_id: u64, voter: AccountId) -> Option<bool> {
+        let project = self.projects.get(&project_id).expect("Project not found");
+        let votes: LookupMap<(u64, u8, AccountId), bool> = LookupMap::new(b"mv");
+        votes.get(&(project_id, project.milestone_index, voter))
+    }
+
+    fn finalize_milestone(&mut self, project_id: u64, mut project: Project, pass: bool) {
         let index = project.milestone_index as usize;
-        assert!(index < project.milestones.len(), "No milestone remains");
         if pass {
             let tranche = project.milestones[index].amount;
             let available = project.raised.saturating_sub(project.paid);
@@ -181,9 +219,7 @@ impl DreamFund {
                 project.status = "complete".to_string();
                 let recycled = project.raised.saturating_sub(project.paid);
                 self.pool_balance = self.pool_balance.checked_add(recycled).expect("Pool balance overflow");
-                if recycled > 0 {
-                    env::log_str(&format!("DREAMFUND_POOL_RECYCLED project={} amount={} reason=completed_surplus", project_id, recycled));
-                }
+                if recycled > 0 { env::log_str(&format!("DREAMFUND_POOL_RECYCLED project={} amount={} reason=completed_surplus", project_id, recycled)); }
             }
             let recipient = project.owner.clone();
             self.projects.insert(&project_id, &project);
@@ -192,9 +228,9 @@ impl DreamFund {
         } else {
             let remaining = project.raised.saturating_sub(project.paid);
             self.pool_balance = self.pool_balance.checked_add(remaining).expect("Pool balance overflow");
-            env::log_str(&format!("DREAMFUND_POOL_RECYCLED project={} amount={} reason=milestone_rejected", project_id, remaining));
+            env::log_str(&format!("DREAMFUND_POOL_RECYCLED project={} amount={} reason=community_vote_rejected", project_id, remaining));
             project.status = "failed".to_string();
-            project.failure_reason = Some("Milestone rejected by the demo resolver".to_string());
+            project.failure_reason = Some("Milestone rejected by community vote".to_string());
             project.evidence_hash = None;
             self.projects.insert(&project_id, &project);
         }
