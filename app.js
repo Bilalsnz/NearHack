@@ -113,8 +113,8 @@ async function connectWallet() {
     ["HERE Wallet", "here-wallet"],
     ["Nightly Wallet", "nightly"]
   ];
-  const menu = choices.map(([label], i) => `${i + 1}. ${label}`).join("\\n");
-  const answer = prompt("Choose your NEAR wallet:\\n\\n" + menu + "\\n\\nEnter a number:");
+  const menu = choices.map(([label], i) => `${i + 1}. ${label}`).join("\n");
+  const answer = prompt("Choose your NEAR wallet:\n\n" + menu + "\n\nEnter the wallet number:");
   if (answer === null) return;
   const choice = Number(answer);
   if (!Number.isInteger(choice) || choice < 1 || choice > choices.length) {
