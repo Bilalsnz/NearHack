@@ -60,12 +60,28 @@ function updateWalletUI() {
   $("wallet-account").textContent = accountId || "";
 }
 async function initWallet() {
-  // Public project data must load even when the visitor has no wallet or the
-  // current browser cannot initialize a particular wallet connector.
-  near = await connect({ ...NETWORK, keyStore: new keyStores.BrowserLocalStorageKeyStore() });
   ensureConfigured();
-  await refresh();
 
+  // Public reads must not depend on browser wallet storage or wallet-selector
+  // initialization. An in-memory key store is sufficient for read-only RPC.
+  try {
+    near = await connect({
+      ...NETWORK,
+      keyStore: new keyStores.InMemoryKeyStore()
+    });
+    await refresh();
+  } catch (error) {
+    console.error("Public NEAR RPC initialization failed:", error);
+    $("pool-balance").innerHTML = "Unavailable <small>NEAR</small>";
+    $("project-count").textContent = "—";
+    $("my-rep").textContent = "—";
+    $("project-grid").innerHTML =
+      '<div class="empty-state">Could not reach NEAR Testnet right now. Tap Refresh to retry. Wallet connection is a separate step.</div>';
+    toast("NEAR Testnet data could not load: " + error.message);
+  }
+
+  // Wallet connection is initialized independently. A wallet module failure
+  // must never prevent the public portfolio from loading.
   try {
     selector = await setupWalletSelector({
       network: "testnet",
@@ -87,11 +103,11 @@ async function initWallet() {
       accountId = savedAccounts[0].accountId;
     }
   } catch (error) {
-    // Do not let a wallet-specific setup failure hide the public portfolio.
     console.warn("Wallet connectors unavailable in this browser:", error);
   }
+
   updateWalletUI();
-  if (accountId) await refresh();
+  if (accountId && near) await refresh();
 }
 async function connectWallet() {
   if (!selector) throw new Error("Wallet connections are unavailable in this browser. You can still browse public projects.");
@@ -170,14 +186,22 @@ async function call(methodName, args = {}, deposit = "0") {
   });
 }
 async function refresh() {
-  if (!near || !CONTRACT_ID || CONTRACT_ID.startsWith("REPLACE_")) {
+  if (!CONTRACT_ID || CONTRACT_ID.startsWith("REPLACE_")) {
     $("pool-balance").innerHTML = "Not deployed <small>yet</small>";
     $("project-count").textContent = "—";
     $("my-rep").textContent = "—";
-    $("project-grid").innerHTML = '<div class="empty-state">The NEAR testnet contract has not been deployed yet. Once the deployment workflow succeeds, config.js will be updated automatically and projects will appear here.</div>';
+    $("project-grid").innerHTML = '<div class="empty-state">The NEAR testnet contract has not been deployed yet.</div>';
     return;
   }
   try {
+    // Re-establish the public RPC connection on manual refresh if startup
+    // encountered a transient RPC or browser-storage problem.
+    if (!near) {
+      near = await connect({
+        ...NETWORK,
+        keyStore: new keyStores.InMemoryKeyStore()
+      });
+    }
     const [pool, projects, resolver] = await Promise.all([
       view("get_pool"),
       view("get_projects"),
@@ -191,7 +215,12 @@ async function refresh() {
       : "—";
     await renderProjects(projects);
   } catch (error) {
-    console.error(error);
+    console.error("Could not refresh public contract data:", error);
+    if (!near) {
+      $("pool-balance").innerHTML = "Unavailable <small>NEAR</small>";
+      $("project-count").textContent = "—";
+    }
+    $("project-grid").innerHTML = '<div class="empty-state">Could not load NEAR Testnet data. Check your connection and tap Refresh to retry. This does not mean your wallet or funds are disconnected.</div>';
     toast("Could not load contract data: " + error.message);
   }
 }
