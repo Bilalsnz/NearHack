@@ -59,23 +59,6 @@ function updateWalletUI() {
   $("btn-connect").textContent = accountId ? "Disconnect" : "Connect NEAR Wallet";
   $("wallet-account").textContent = accountId || "";
 }
-function showWalletDiagnostics(issues) {
-  const panel = $("wallet-diagnostics");
-  if (!panel) return;
-  const describe = (error) => {
-    if (!error) return "Unknown error";
-    const name = error.name || "Error";
-    const message = error.message || String(error);
-    const stack = error.stack ? String(error.stack).split("\\n").slice(0, 5).join("\\n") : "";
-    return name + ": " + message + (stack ? "\\n" + stack : "");
-  };
-  const lines = issues.map((item) => item.stage + "\\n" + describe(item.error));
-  lines.push("Browser: " + (navigator.userAgent || "unavailable"));
-  lines.push("URL: " + location.href);
-  panel.hidden = false;
-  panel.querySelector("pre").textContent = lines.join("\\n\\n");
-  console.error("DreamFund wallet diagnostics:", lines.join("\\n\\n"));
-}
 async function initWallet() {
   // Public project data must load even when the visitor has no wallet or the
   // current browser cannot initialize a particular wallet connector.
@@ -83,51 +66,18 @@ async function initWallet() {
   ensureConfigured();
   await refresh();
 
-  const walletInitIssues = [];
-  const moduleFactories = [
-    ["meteor-wallet-app", () => setupMeteorWalletApp({ contractId: CONTRACT_ID })],
-    ["meteor-wallet", () => setupMeteorWallet()],
-    ["my-near-wallet", () => setupMyNearWallet({ walletUrl: "https://testnet.mynearwallet.com" })],
-    ["sender", () => setupSender()],
-    ["here-wallet", () => setupHereWallet()],
-    ["nightly", () => setupNightly()]
-  ];
-  const modules = [];
-  // Isolate synchronous connector construction failures so one optional
-  // wallet cannot prevent all other wallets from being offered.
-  for (const [id, createModule] of moduleFactories) {
-    try {
-      modules.push(createModule());
-    } catch (error) {
-      walletInitIssues.push({ stage: "module setup: " + id, error });
-      console.warn("Wallet module setup failed: " + id, error);
-    }
-  }
-
   try {
-    selector = await setupWalletSelector({ network: "testnet", modules });
-  } catch (combinedError) {
-    walletInitIssues.push({ stage: "combined selector initialization", error: combinedError });
-    console.error("Combined wallet selector initialization failed:", combinedError);
-    // Retry with the in-app Meteor connector alone. This distinguishes a
-    // failing optional connector from a Meteor connector/runtime failure.
-    try {
-      selector = await setupWalletSelector({
-        network: "testnet",
-        modules: [setupMeteorWalletApp({ contractId: CONTRACT_ID })]
-      });
-      walletInitIssues.push({
-        stage: "fallback",
-        error: new Error("Meteor-only selector initialized. One or more optional wallet connectors may be incompatible with this browser.")
-      });
-    } catch (meteorOnlyError) {
-      walletInitIssues.push({ stage: "Meteor-only selector initialization", error: meteorOnlyError });
-      console.error("Meteor-only selector initialization failed:", meteorOnlyError);
-      showWalletDiagnostics(walletInitIssues);
-    }
-  }
-
-  if (selector) {
+    selector = await setupWalletSelector({
+      network: "testnet",
+      modules: [
+        setupMeteorWalletApp({ contractId: CONTRACT_ID }),
+        setupMeteorWallet(),
+        setupMyNearWallet({ walletUrl: "https://testnet.mynearwallet.com" }),
+        setupSender(),
+        setupHereWallet(),
+        setupNightly()
+      ]
+    });
     const state = selector.store.getState();
     const savedAccounts = state.accounts || [];
     const selectedWalletId = state.selectedWalletId;
@@ -136,7 +86,9 @@ async function initWallet() {
       activeWalletId = selectedWalletId;
       accountId = savedAccounts[0].accountId;
     }
-    if (walletInitIssues.length) showWalletDiagnostics(walletInitIssues);
+  } catch (error) {
+    // Do not let a wallet-specific setup failure hide the public portfolio.
+    console.warn("Wallet connectors unavailable in this browser:", error);
   }
   updateWalletUI();
   if (accountId) await refresh();
