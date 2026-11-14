@@ -174,8 +174,8 @@ impl DreamFund {
         assert_ne!(voter, project.owner, "Project owners cannot vote on their own milestones");
 
         let index = project.milestone_index;
-        let mut votes: LookupMap<(u64, u8, AccountId), bool> = LookupMap::new(b"mv");
-        let mut tallies: LookupMap<(u64, u8), VoteTally> = LookupMap::new(b"mt");
+        let mut votes: LookupMap<(u64, u8, AccountId), bool> = LookupMap::new(&b"mv"[..]);
+        let mut tallies: LookupMap<(u64, u8), VoteTally> = LookupMap::new(&b"mt"[..]);
         let vote_key = (project_id, index, voter.clone());
         assert!(votes.get(&vote_key).is_none(), "You have already voted on this milestone");
         let mut tally = tallies.get(&(project_id, index)).unwrap_or_default();
@@ -193,14 +193,14 @@ impl DreamFund {
 
     pub fn get_milestone_votes(&self, project_id: u64) -> (u8, u8, u8) {
         let project = self.projects.get(&project_id).expect("Project not found");
-        let tallies: LookupMap<(u64, u8), VoteTally> = LookupMap::new(b"mt");
+        let tallies: LookupMap<(u64, u8), VoteTally> = LookupMap::new(&b"mt"[..]);
         let tally = tallies.get(&(project_id, project.milestone_index)).unwrap_or_default();
         (tally.approve, tally.reject, tally.total)
     }
 
     pub fn get_my_milestone_vote(&self, project_id: u64, voter: AccountId) -> Option<bool> {
         let project = self.projects.get(&project_id).expect("Project not found");
-        let votes: LookupMap<(u64, u8, AccountId), bool> = LookupMap::new(b"mv");
+        let votes: LookupMap<(u64, u8, AccountId), bool> = LookupMap::new(&b"mv"[..]);
         votes.get(&(project_id, project.milestone_index, voter))
     }
 
